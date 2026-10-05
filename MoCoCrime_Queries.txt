@@ -1,0 +1,86 @@
+USE inst327project;
+
+/*View 1 */
+CREATE VIEW v_city_pra_totals_and_averages AS
+SELECT 
+	IF(district_name IS NULL,
+    "Total PRA in Montgomery County",
+    district_name)
+    AS district_name,
+    sum(PRA) AS "Total PRA in each city",
+    IF(GROUPING(district_name) = 1,
+    NULL,
+    ROUND(AVG(PRA), 1)
+    ) AS "Average PRA in Montgomery County"
+FROM district
+GROUP BY district_name WITH ROLLUP 
+ORDER BY
+	IF(district_name IS NULL, 1, 0),
+    district_name;
+
+/*View 2 */
+CREATE VIEW v_zip_alcohol_crime_breakdown AS
+SELECT zip_code, COUNT(crime_name) AS Number_of_Crimes, crime_against, crime_category
+FROM location l JOIN incident i
+ON l.location_id = i.location_id
+JOIN incidentOffense io
+ON i.incident_id = io.incident_id
+JOIN offense o
+ON io.offense_id = o.offense_id
+WHERE crime_category = "DRIVING UNDER THE INFLUENCE LIQUOR" OR crime_category = "LIQUOR (DESCRIBE OFFENSE)" OR crime_category = "LIQUOR - POSSESS"
+GROUP BY zip_code, crime_against, crime_category
+HAVING NUMBER_of_Crimes > 0
+ORDER BY Number_of_Crimes DESC;
+
+/*View 3 */
+CREATE VIEW v_high_crime_addresses AS
+SELECT l.block_address,
+	   l.zip_code,
+       COUNT(o.offense_id) AS address_crime_count
+FROM location l 
+JOIN incident i ON l.location_id = i.location_id
+JOIN incidentOffense io ON i.incident_id = io.incident_id
+JOIN offense o ON io.offense_id = o.offense_id
+GROUP BY l.block_address, l.zip_code
+HAVING address_crime_count >
+(
+	SELECT AVG (crime_total)
+		FROM (
+			SELECT
+				COUNT(o2.offense_id) AS crime_total
+                FROM location l2 
+				JOIN incident i2 ON l2.location_id = i2.location_id
+				JOIN incidentOffense io2 ON i2.incident_id = io2.incident_id
+				JOIN offense o2 ON io2.offense_id = o2.offense_id
+                GROUP BY l2.block_address
+			 ) AS avg_table
+)
+ORDER BY address_crime_count DESC;
+       
+/*View 4 */
+
+CREATE VIEW v_cases_by_agency_and_city AS
+SELECT 
+    a.agency_name AS Agency_Name,
+    l.city AS City,
+    COUNT(i.incident_id) AS Total_Cases
+FROM Incident i
+JOIN Agency a USING (agency_id)
+JOIN Location l USING (location_id)
+WHERE l.city IS NOT NULL
+GROUP BY a.agency_name, l.city
+ORDER BY total_cases DESC;
+
+/*View 5 */
+
+CREATE VIEW v_victims_by_crime_category AS
+SELECT
+    o.crime_category AS Crime_Category,
+    SUM(i.victims) AS Total_Victims,
+    COUNT(i.incident_id) AS Total_Incidents
+FROM Incident i
+JOIN IncidentOffense io USING (incident_id)
+JOIN Offense o USING (offense_id)
+WHERE i.victims IS NOT NULL
+GROUP BY o.crime_category
+ORDER BY Total_Victims DESC;
